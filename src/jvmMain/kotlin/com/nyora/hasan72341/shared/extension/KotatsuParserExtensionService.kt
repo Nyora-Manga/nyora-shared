@@ -35,6 +35,9 @@ class KotatsuParserExtensionService(
     // family's Site-Id/Authorization) is applied to the client it uses.
     private val parser = context.newParserInstance(parserSource).also { context.bindParser(it) }
 
+    // Catalogue entries seen so far, so details can be seeded with the entry the user tapped.
+    private val listed = ListedMangaCache<LibManga>()
+
     override val supportsLatest: Boolean
         get() = SortOrder.UPDATED in parser.availableSortOrders
 
@@ -51,7 +54,10 @@ class KotatsuParserExtensionService(
         toPage(parser.getList(offsetFor(page), pickOrder(SortOrder.RELEVANCE), MangaListFilter(query = query)))
 
     override suspend fun getDetails(url: String): MangaDetails {
-        val seed = LibManga(
+        // Prefer the catalogue entry the user tapped (title, cover, rating… — what kotatsu
+        // parsers expect to receive); fall back to a bare seed when this url was never listed
+        // (deep link, favourite opened after a restart).
+        val seed = listed.get(url) ?: LibManga(
             id = url.hashCode().toLong(),
             title = "",
             altTitles = emptySet(),
@@ -101,8 +107,10 @@ class KotatsuParserExtensionService(
         return if (preferred in available) preferred else available.firstOrNull() ?: preferred
     }
 
-    private fun toPage(list: List<LibManga>): MangaSearchPage =
-        MangaSearchPage(entries = list.map { it.toNyora() }, hasNextPage = list.isNotEmpty())
+    private fun toPage(list: List<LibManga>): MangaSearchPage {
+        list.forEach { listed.put(it.url, it) }
+        return MangaSearchPage(entries = list.map { it.toNyora() }, hasNextPage = list.isNotEmpty())
+    }
 
     private fun LibManga.toNyora(): Manga = Manga(
         id = id.toString(),
