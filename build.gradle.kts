@@ -56,6 +56,11 @@ kotlin {
                 implementation("org.json:json:20240303")
             }
         }
+        val jvmTest by getting {
+            dependencies {
+                implementation(kotlin("test"))
+            }
+        }
     }
 }
 
